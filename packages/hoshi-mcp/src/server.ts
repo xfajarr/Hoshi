@@ -9,8 +9,12 @@ import { loadConfig } from './config/index.js'
 import { Hono } from 'hono'
 import { serve } from '@hono/node-server'
 import { cors } from 'hono/cors'
+import { loadSkills, matchSkills } from './skills/loader.js'
+import { join, dirname } from 'path'
+import { fileURLToPath } from 'url'
 
 let context: ServerContext
+let skills = new Map()
 
 async function initialize(): Promise<void> {
   const config = loadConfig()
@@ -26,6 +30,12 @@ async function initialize(): Promise<void> {
       toolRegistry[i] = withPolicy(toolRegistry[i], context)
     }
   }
+  
+  // Load skills
+  const __dirname = dirname(fileURLToPath(import.meta.url))
+  const skillsDir = join(__dirname, '..', 'skills')
+  skills = loadSkills(skillsDir)
+  console.error(`[hoshi-mcp] Loaded ${skills.size} skills`)
   
   console.error(`[hoshi-mcp] Initialized with ${listTools().length} tools`)
   console.error(`[hoshi-mcp] RPC: ${config.rpcEndpoint}`)
@@ -181,6 +191,45 @@ function startHttpTransport(port: number, host: string) {
     policy: context.config.policyEnabled
   }))
   
+  app.get('/skills', (c) => c.json({
+    skills: Array.from(skills.values()).map(s => ({
+      id: s.id,
+      name: s.name,
+      category: s.category,
+      risk: s.risk,
+      description: s.description,
+      tools: s.tools.map((t: any) => t.name)
+    }))
+  }))
+  
+  app.get('/skills/:id', (c) => {
+    const id = c.req.param('id')
+    const skill = skills.get(id)
+    if (!skill) return c.json({ error: 'Skill not found' }, 404)
+    return c.json({ skill: {
+      id: skill.id,
+      name: skill.name,
+      version: skill.version,
+      category: skill.category,
+      risk: skill.risk,
+      description: skill.description,
+      whenToUse: skill.whenToUse,
+      tools: skill.tools,
+      systemPrompt: skill.systemPrompt,
+      examples: skill.examples,
+      guardrails: skill.guardrails
+    }})
+  })
+  
+  app.post('/skills/match', async (c) => {
+    const { query } = await c.req.json()
+    const matched = matchSkills(skills, query)
+    return c.json({ 
+      query,
+      matched: matched.map(s => ({ id: s.id, name: s.name, risk: s.risk }))
+    })
+  })
+  
   app.get('/tools', (c) => c.json({ 
     tools: listTools().map(t => ({
       name: t.name,
@@ -233,6 +282,7 @@ function startHttpTransport(port: number, host: string) {
   }, () => {
     console.error(`[hoshi-mcp] HTTP transport ready on http://${host}:${port}`)
     console.error(`[hoshi-mcp] Health: http://${host}:${port}/health`)
+    console.error(`[hoshi-mcp] Skills: http://${host}:${port}/skills`)
     console.error(`[hoshi-mcp] Tools: http://${host}:${port}/tools`)
   })
 }

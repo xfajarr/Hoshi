@@ -1,8 +1,6 @@
 // Core
 export * from './core/protocol.js'
 export * from './core/tools.js'
-
-// Server
 export * from './core/server.js'
 export * from './core/policy-tools.js'
 

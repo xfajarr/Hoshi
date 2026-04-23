@@ -10,15 +10,19 @@ import {
   YieldService,
   KeypairSigner,
   type SignerPort,
-  type Result
+  type Result,
+  type Wallet,
+  type Receipt,
+  type Invoice,
+  type PaymentLink,
+  type YieldPosition
 } from '@hoshi/sdk'
 import { 
   PolicyEngine, 
   ExecutionService,
   InMemoryPolicyStore,
   InMemoryApprovalStore,
-  type PolicyRule,
-  type PolicyResult
+  type PolicyRule
 } from '@hoshi/engine'
 import type { ServerConfig } from '../config/index.js'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
@@ -42,24 +46,17 @@ class McpJsonStorage extends InMemoryStorageAdapter {
     if (!existsSync(this.path)) return
     try {
       const data = JSON.parse(readFileSync(this.path, 'utf-8'))
-      // Restore data into parent's private maps
-      // @ts-expect-error accessing private fields
-      if (data.wallets) data.wallets.forEach((w: any) => this.wallets.set(w.id, w))
-      // @ts-expect-error
-      if (data.receipts) data.receipts.forEach((r: any) => this.receipts.set(r.id, r))
-      // @ts-expect-error
-      if (data.invoices) data.invoices.forEach((i: any) => this.invoices.set(i.id, i))
-      // @ts-expect-error
-      if (data.paymentLinks) data.paymentLinks.forEach((p: any) => this.paymentLinks.set(p.id, p))
-      // @ts-expect-error
-      if (data.yieldPositions) data.yieldPositions.forEach((y: any) => this.yieldPositions.set(y.id, y))
+      if (data.wallets) data.wallets.forEach((w: Wallet) => this.wallets.set(w.id, w))
+      if (data.receipts) data.receipts.forEach((r: Receipt) => this.receipts.set(r.id, r))
+      if (data.invoices) data.invoices.forEach((i: Invoice) => this.invoices.set(i.id, i))
+      if (data.paymentLinks) data.paymentLinks.forEach((p: PaymentLink) => this.paymentLinks.set(p.id, p))
+      if (data.yieldPositions) data.yieldPositions.forEach((y: YieldPosition) => this.yieldPositions.set(y.id, y))
     } catch {
       // Ignore corrupted files
     }
   }
   
   async save(): Promise<void> {
-    // @ts-expect-error
     const data = {
       wallets: Array.from(this.wallets.values()),
       receipts: Array.from(this.receipts.values()),

@@ -39,7 +39,6 @@ export function registerFinancialTools(context: ServerContext): void {
       // Get all balances
       const { PublicKey } = await import('@solana/web3.js')
       const pubkey = new PublicKey(walletResult.value.publicKey)
-      // @ts-expect-error accessing internal chain
       const balancesResult = await walletService['chain'].getBalances(pubkey)
       if (!balancesResult.ok) throw new Error(balancesResult.error.message)
       
@@ -76,7 +75,6 @@ export function registerFinancialTools(context: ServerContext): void {
     category: 'read',
     handler: async (args) => {
       const { walletId, limit = 50 } = args as { walletId: string; limit?: number }
-      // @ts-expect-error accessing internal storage
       const result = await walletService['storage'].getReceipts(walletId)
       if (!result.ok) throw new Error(result.error.message)
       return { 
@@ -246,7 +244,6 @@ export function registerFinancialTools(context: ServerContext): void {
       if (!result.ok) throw new Error(result.error.message)
       
       // Set blockhash and fee payer for serialization
-      // @ts-expect-error accessing internal chain
       const blockhashResult = await transferService['chain'].getLatestBlockhash()
       if (blockhashResult.ok) {
         result.value.transaction.recentBlockhash = blockhashResult.value
@@ -297,12 +294,13 @@ export function registerFinancialTools(context: ServerContext): void {
     name: 'hoshi_withdraw_yield',
     description: 'Withdraw from a yield position',
     inputSchema: z.object({
+      walletId: z.string(),
       positionId: z.string()
     }),
     category: 'write_escalated',
     handler: async (args) => {
-      const { positionId } = args as { positionId: string }
-      const result = await yieldService.withdraw({ positionId })
+      const { walletId, positionId } = args as { walletId: string; positionId: string }
+      const result = await yieldService.withdraw({ walletId, positionId })
       if (!result.ok) throw new Error(result.error.message)
       return { receipt: result.value }
     }

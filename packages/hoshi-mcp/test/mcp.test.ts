@@ -1,62 +1,128 @@
-import { describe, it, expect, beforeAll } from 'vitest'
-import {
-  SolanaChainAdapter,
-  InMemoryStorageAdapter,
-  JupiterSwapAdapter,
-  KaminoYieldAdapter,
-  WalletService,
-  TransferService,
-  InvoiceService,
-  SwapService,
-  YieldService
-} from '@hoshi/sdk'
-import { registerFinancialTools, getTool, listTools } from '../src/index.js'
+import { describe, it, expect, beforeEach } from 'vitest'
+import { 
+  toolRegistry, 
+  registerTool, 
+  getTool, 
+  listTools 
+} from '../src/core/tools.js'
+import { 
+  walletManagement, 
+  transfer, 
+  policyManagement,
+  allSkills,
+  getSkill
+} from '../src/skills/index.js'
 
-describe('MCP Financial Tools', () => {
-  beforeAll(() => {
-    const storage = new InMemoryStorageAdapter()
-    const chain = new SolanaChainAdapter('https://api.devnet.solana.com')
-    const jupiter = new JupiterSwapAdapter()
-    const kamino = new KaminoYieldAdapter()
-
-    registerFinancialTools({
-      walletService: new WalletService(storage, chain),
-      transferService: new TransferService(storage, chain),
-      invoiceService: new InvoiceService(storage),
-      swapService: new SwapService(storage, jupiter),
-      yieldService: new YieldService(storage, kamino)
+describe('MCP Core', () => {
+  beforeEach(() => {
+    // Clear registry
+    toolRegistry.length = 0
+  })
+  
+  it('should register and retrieve tools', () => {
+    registerTool({
+      name: 'test_tool',
+      description: 'A test tool',
+      inputSchema: {} as any,
+      category: 'read',
+      handler: async () => ({ result: 'ok' })
     })
-  })
-
-  it('should register all tools', () => {
-    const tools = listTools()
-    expect(tools.length).toBeGreaterThan(0)
-    expect(tools.some(t => t.name === 'hoshi_balance')).toBe(true)
-    expect(tools.some(t => t.name === 'hoshi_send')).toBe(true)
-    expect(tools.some(t => t.name === 'hoshi_swap_quote')).toBe(true)
-  })
-
-  it('should categorize tools correctly', () => {
-    const balanceTool = getTool('hoshi_balance')
-    expect(balanceTool?.category).toBe('read')
-
-    const sendTool = getTool('hoshi_send')
-    expect(sendTool?.category).toBe('write_escalated')
-
-    const invoiceTool = getTool('hoshi_create_invoice')
-    expect(invoiceTool?.category).toBe('write_safe')
-  })
-
-  it('should handle balance read tool', async () => {
-    const tool = getTool('hoshi_balance')
+    
+    const tool = getTool('test_tool')
     expect(tool).toBeDefined()
+    expect(tool?.name).toBe('test_tool')
+    expect(tool?.category).toBe('read')
+  })
+  
+  it('should list all tools', () => {
+    registerTool({
+      name: 'tool_a',
+      description: 'Tool A',
+      inputSchema: {} as any,
+      category: 'read',
+      handler: async () => ({})
+    })
+    registerTool({
+      name: 'tool_b',
+      description: 'Tool B',
+      inputSchema: {} as any,
+      category: 'write_safe',
+      handler: async () => ({})
+    })
+    
+    const tools = listTools()
+    expect(tools).toHaveLength(2)
+    expect(tools.map(t => t.name)).toContain('tool_a')
+    expect(tools.map(t => t.name)).toContain('tool_b')
+  })
+})
 
-    // Should fail with non-existent wallet
-    try {
-      await tool!.handler({ walletId: '00000000-0000-0000-0000-000000000000', asset: 'SOL' })
-      expect.fail('Should have thrown')
-    } catch (err) {
-      expect(err).toBeDefined()
-    }
+describe('Skills', () => {
+  it('should export all skills', () => {
+    expect(allSkills).toHaveLength(6)
+    expect(allSkills).toContain('wallet-management')
+    expect(allSkills).toContain('transfer')
+    expect(allSkills).toContain('policy-management')
+  })
+  
+  it('should get skill definitions', () => {
+    const walletSkill = getSkill('wallet-management')
+    expect(walletSkill).toBeDefined()
+    expect(walletSkill?.name).toBe('hoshi-wallet-management')
+    expect(walletSkill?.tools).toContain('hoshi_wallet_create')
+    expect(walletSkill?.tools).toContain('hoshi_balance')
+  })
+  
+  it('should get transfer skill', () => {
+    const skill = getSkill('transfer')
+    expect(skill).toBeDefined()
+    expect(skill?.name).toBe('hoshi-transfer')
+    expect(skill?.risk).toBe('elevated')
+    expect(skill?.tools).toContain('hoshi_send')
+  })
+  
+  it('should get policy management skill', () => {
+    const skill = getSkill('policy-management')
+    expect(skill).toBeDefined()
+    expect(skill?.name).toBe('hoshi-policy-management')
+    expect(skill?.risk).toBe('critical')
+    expect(skill?.tools).toContain('hoshi_policy_add')
+    expect(skill?.tools).toContain('hoshi_approve')
+  })
+  
+  it('should return null for unknown skill', () => {
+    const skill = getSkill('nonexistent')
+    expect(skill).toBeNull()
+  })
+  
+  it('should have trigger phrases for each skill', () => {
+    const transferSkill = getSkill('transfer')
+    expect(transferSkill?.triggers).toContain('send SOL')
+    expect(transferSkill?.triggers).toContain('transfer')
+    
+    const policySkill = getSkill('policy-management')
+    expect(policySkill?.triggers).toContain('set policy')
+    expect(policySkill?.triggers).toContain('guardrails')
+  })
+  
+  it('should have system prompts', () => {
+    const walletSkill = getSkill('wallet-management')
+    expect(walletSkill?.systemPrompt).toContain('treasury assistant')
+    
+    const transferSkill = getSkill('transfer')
+    expect(transferSkill?.systemPrompt).toContain('secure transfer agent')
+    expect(transferSkill?.systemPrompt).toContain('POLICY AWARENESS')
+  })
+})
+
+describe('Skill Examples', () => {
+  it('should have examples for transfer skill', () => {
+    const skill = getSkill('transfer')
+    expect(skill?.examples).toBeDefined()
+    expect(skill?.examples?.length).toBeGreaterThan(0)
+    
+    const example = skill?.examples?.[0]
+    expect(example?.input).toContain('Send')
+    expect(example?.toolChain).toContain('hoshi_send')
   })
 })

@@ -105,9 +105,18 @@ importers:
 
   packages/hoshi-mcp:
     dependencies:
+      '@hono/node-server':
+        specifier: ^2.0.0
+        version: 2.0.0(hono@4.12.14)
+      '@hoshi/engine':
+        specifier: workspace:*
+        version: link:../hoshi-engine
       '@hoshi/sdk':
         specifier: workspace:*
         version: link:../hoshi-sdk
+      hono:
+        specifier: ^4.12.14
+        version: 4.12.14
       zod:
         specifier: ^4.0.0
         version: 4.3.6

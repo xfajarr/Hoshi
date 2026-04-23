@@ -1,6 +1,5 @@
 import type { MCPTool } from './protocol.js'
 import type { ServerContext } from './server.js'
-import { Result as R } from '@hoshi/sdk'
 
 /**
  * Policy check result for tool execution

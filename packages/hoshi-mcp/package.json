@@ -1,7 +1,7 @@
 {
   "name": "@hoshi/mcp",
   "version": "0.1.0",
-  "description": "Hoshi MCP Server - Agent-facing financial tools",
+  "description": "Hoshi MCP Server - Agent-facing financial tools with policy governance",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -22,7 +22,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "start": "node dist/server.js",
+    "start:http": "HOSHI_TRANSPORT=http node dist/server.js"
   },
   "devDependencies": {
     "tsup": "^8.0.0",
@@ -32,6 +34,9 @@
   },
   "dependencies": {
     "@hoshi/sdk": "workspace:*",
+    "@hoshi/engine": "workspace:*",
+    "hono": "^4.12.14",
+    "@hono/node-server": "^2.0.0",
     "zod": "^4.0.0"
   }
 }

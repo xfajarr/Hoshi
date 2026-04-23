@@ -5,11 +5,12 @@ import { Result as R } from '../../core/result.js'
 // NotFoundError not needed in this adapter from '../../core/errors.js'
 
 export class InMemoryStorageAdapter implements StoragePort {
-  private wallets = new Map<string, Wallet>()
-  private receipts = new Map<string, Receipt>()
-  private invoices = new Map<string, Invoice>()
-  private paymentLinks = new Map<string, PaymentLink>()
-  private yieldPositions = new Map<string, YieldPosition>()
+  /** `protected` so persisted subclasses (e.g. MCP) can hydrate from disk. */
+  protected wallets = new Map<string, Wallet>()
+  protected receipts = new Map<string, Receipt>()
+  protected invoices = new Map<string, Invoice>()
+  protected paymentLinks = new Map<string, PaymentLink>()
+  protected yieldPositions = new Map<string, YieldPosition>()
 
   // Wallet operations
   async saveWallet(wallet: Wallet): Promise<Result<void, never>> {

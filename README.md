@@ -34,7 +34,7 @@ Hoshi is a modular TypeScript monorepo: a **core SDK** for treasury-style operat
 
 ```bash
 git clone <repository-url>
-cd Hoshi
+cd <repo-root>   # workspace root: contains `pnpm-workspace.yaml`
 pnpm install
 pnpm build
 pnpm test
@@ -179,10 +179,12 @@ Data flow summary:
 ## Development
 
 ```bash
-pnpm lint          # if configured per package
-pnpm typecheck     # TypeScript noEmit across packages
-pnpm clean         # turbo clean (removes build outputs per package)
+pnpm dev           # watch builds (tsup --watch) where defined
+pnpm typecheck     # `tsc --noEmit` in packages that define the script
+pnpm clean         # turbo clean — removes `dist/` (and similar) per package
 ```
+
+`pnpm lint` is wired at the root through Turborepo; individual packages do not define lint tasks yet, so it is currently a no-op.
 
 **Single-package focus:**
 
@@ -195,7 +197,7 @@ pnpm --filter @hoshi/gateway build
 
 ## Production notes
 
-This repository is an **MVP-grade** foundation: tests and builds are green, but you should treat deployment as requiring your own checklist:
+This repository is an **MVP-grade** foundation. Before you rely on it in production, run **`pnpm build`** and **`pnpm test`** on the exact commit you intend to ship, and treat deployment as requiring your own checklist:
 
 - **RPC** — use private, rate-limited endpoints for production; defaults are public devnet/mainnet URLs where applicable.
 - **Keys** — never commit keypairs; CLI uses local filesystem paths only.

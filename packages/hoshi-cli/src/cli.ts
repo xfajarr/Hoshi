@@ -17,6 +17,22 @@ import { JsonFileStorage } from './store.js'
 import { JsonFilePolicyStore } from './policy-store.js'
 import { createDefaultGuardrails } from './default-policies.js'
 import { promptSecret } from './prompt.js'
+import { setJsonMode, setYesMode } from './output.js'
+import { registerInit } from './commands/init.js'
+import { registerConfig } from './commands/config.js'
+import { registerAddress } from './commands/address.js'
+import { registerHistory } from './commands/history.js'
+import { registerContacts } from './commands/contacts.js'
+import { registerMcp } from './commands/mcp.js'
+import { registerLock } from './commands/lock.js'
+import { registerDeposit } from './commands/deposit.js'
+import { registerSave } from './commands/save.js'
+import { registerStake } from './commands/stake.js'
+import { registerEarnings } from './commands/earnings.js'
+import { registerServe } from './commands/serve.js'
+import { registerExportKey } from './commands/exportKey.js'
+import { registerGas, registerClaimRewards, registerFundStatus } from './commands/gas.js'
+import { registerPay, registerEarn } from './commands/pay.js'
 
 const DEFAULT_KEYSTORE_DIR = join(homedir(), '.hoshi', 'keys')
 
@@ -29,6 +45,16 @@ program
   .option('-r, --rpc <url>', 'Solana RPC endpoint', 'https://api.devnet.solana.com')
   .option('--mainnet', 'Use mainnet RPC (https://api.mainnet-beta.solana.com)')
   .option('-k, --keypair <path>', 'Path to Solana keypair file (for signing transactions)')
+  .option('--json', 'Output results as JSON')
+  .option('-y, --yes', 'Skip confirmation prompts')
+
+program.on('option:json', () => {
+  setJsonMode(true)
+})
+
+program.on('option:yes', () => {
+  setYesMode(true)
+})
 
 const getRpcUrl = (cmd: Command): string => {
   const opts = cmd.opts()
@@ -719,5 +745,25 @@ program
     if (result.value.requiresApproval) console.log('  Requires approval: YES')
     printPolicyResult(result.value.rulesTriggered, result.value.reason)
   })
+
+// Register new commands
+registerInit(program)
+registerConfig(program)
+registerAddress(program)
+registerHistory(program)
+registerContacts(program)
+registerMcp(program)
+registerLock(program)
+registerDeposit(program)
+registerSave(program)
+registerStake(program)
+registerEarnings(program)
+registerEarn(program)
+registerServe(program)
+registerExportKey(program)
+registerGas(program)
+registerClaimRewards(program)
+registerFundStatus(program)
+registerPay(program)
 
 program.parse()

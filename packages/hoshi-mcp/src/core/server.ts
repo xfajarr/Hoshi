@@ -9,6 +9,7 @@ import {
   SwapService,
   YieldService,
   KeypairSigner,
+  EncryptedKeypairVault,
   type SignerPort,
   type Result,
   type Wallet,
@@ -22,7 +23,8 @@ import {
   ExecutionService,
   InMemoryPolicyStore,
   InMemoryApprovalStore,
-  type PolicyRule
+  type PolicyRule,
+  type ApprovalRequest
 } from '@hoshi/engine'
 import type { ServerConfig } from '../config/index.js'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
@@ -139,10 +141,40 @@ class McpJsonPolicyStore extends InMemoryPolicyStore {
  * Persistent approval store
  */
 class McpJsonApprovalStore extends InMemoryApprovalStore {
-  constructor(path: string) {
+  private data: ApprovalRequest[] = []
+
+  constructor(private readonly path: string) {
     super()
     const dir = dirname(path)
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+    this.load()
+  }
+
+  private load(): void {
+    if (!existsSync(this.path)) return
+    try {
+      this.data = JSON.parse(readFileSync(this.path, 'utf-8')) as ApprovalRequest[]
+      this.data.forEach((request) => this.requests.set(request.id, request))
+    } catch {
+      this.data = []
+    }
+  }
+
+  private persist(): void {
+    const data = Array.from(this.requests.values())
+    writeFileSync(this.path, JSON.stringify(data, null, 2))
+  }
+
+  override async create(request: ApprovalRequest): Promise<Result<void, never>> {
+    const result = await super.create(request)
+    this.persist()
+    return result
+  }
+
+  override async update(request: ApprovalRequest): Promise<Result<void, never>> {
+    const result = await super.update(request)
+    this.persist()
+    return result
   }
 }
 
@@ -151,6 +183,9 @@ class McpJsonApprovalStore extends InMemoryApprovalStore {
  */
 export interface ServerContext {
   config: ServerConfig
+  storage: McpJsonStorage
+  policyStore: McpJsonPolicyStore
+  approvalStore: McpJsonApprovalStore
   
   // Services
   walletService: WalletService
@@ -196,7 +231,7 @@ export async function createServerContext(config: ServerConfig): Promise<ServerC
   // Policy
   const policyStore = new McpJsonPolicyStore(policyPath)
   const approvalStore = new McpJsonApprovalStore(approvalPath)
-  const policyEngine = new PolicyEngine(policyStore)
+  const policyEngine = new PolicyEngine(policyStore, { defaultAction: config.defaultAction })
   const executionService = new ExecutionService(policyEngine, approvalStore)
   
   // Signer
@@ -207,10 +242,21 @@ export async function createServerContext(config: ServerConfig): Promise<ServerC
     } catch (err) {
       console.warn(`Failed to load keypair from ${config.keypairPath}:`, err)
     }
+  } else if (config.walletId && config.walletPassword) {
+    const vault = new EncryptedKeypairVault(join(homedir(), '.hoshi', 'keys'))
+    const signerResult = vault.unlock(config.walletId, config.walletPassword)
+    if (signerResult.ok) {
+      signer = signerResult.value
+    } else {
+      console.warn(`Failed to unlock managed wallet ${config.walletId}:`, signerResult.error.message)
+    }
   }
   
   return {
     config,
+    storage,
+    policyStore,
+    approvalStore,
     walletService,
     transferService,
     invoiceService,

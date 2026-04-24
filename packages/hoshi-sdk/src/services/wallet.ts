@@ -6,9 +6,25 @@ import { Result as R } from '../core/result.js'
 import type { Wallet, Balance } from '../core/types.js'
 import { ValidationError, ChainError, NotFoundError, HoshiSDKError } from '../core/errors.js'
 
+
+const MAINNET_USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+const DEVNET_USDC_MINT = '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU'
+
+const getUsdcMintForChain = (chain: ChainPort): PublicKey => {
+  const rpcEndpoint = 'rpcEndpoint' in chain && typeof chain.rpcEndpoint === 'string' ? chain.rpcEndpoint : ''
+  const mint = rpcEndpoint.includes('devnet') ? DEVNET_USDC_MINT : MAINNET_USDC_MINT
+  return new PublicKey(mint)
+}
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
 export interface CreateWalletInput {
+  id?: string
   publicKey: string
   label?: string
+  managed?: boolean
+  keystoreId?: string
+  defaultCluster?: 'devnet' | 'mainnet'
 }
 
 export class WalletService {
@@ -18,6 +34,10 @@ export class WalletService {
   ) {}
 
   async create(input: CreateWalletInput): Promise<Result<Wallet, ValidationError>> {
+    if (input.id && !UUID_REGEX.test(input.id)) {
+      return R.err(new ValidationError('Wallet ID must be a valid UUID', { id: input.id }))
+    }
+
     // Validate public key
     let pubkey: PublicKey
     try {
@@ -28,9 +48,12 @@ export class WalletService {
 
     const now = new Date().toISOString()
     const wallet: Wallet = {
-      id: crypto.randomUUID(),
+      id: input.id ?? crypto.randomUUID(),
       publicKey: pubkey.toBase58(),
       label: input.label,
+      managed: input.managed,
+      keystoreId: input.keystoreId,
+      defaultCluster: input.defaultCluster,
       createdAt: now,
       updatedAt: now
     }
@@ -78,7 +101,7 @@ export class WalletService {
     }
 
     // USDC
-    const usdcMint = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')
+    const usdcMint = getUsdcMintForChain(this.chain)
     const result = await this.chain.getTokenBalance(pubkey, usdcMint)
     if (!result.ok) return result
     return R.ok((Number(result.value) / 1e6).toString())

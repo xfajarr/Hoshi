@@ -9,7 +9,10 @@ export interface PolicyEngineConfig {
 }
 
 export class PolicyEngine {
-  constructor(private readonly store: PolicyStorePort) {}
+  constructor(
+    private readonly store: PolicyStorePort,
+    private readonly config: PolicyEngineConfig = { defaultAction: 'allow' },
+  ) {}
 
   async evaluate(context: PolicyContext): Promise<Result<PolicyResult, Error>> {
     const rulesResult = await this.store.getRules(context.walletId)
@@ -41,11 +44,6 @@ export class PolicyEngine {
           requiresEscalation = true
           break
         case 'allow':
-          // Explicit allow can override block
-          if (blocked) {
-            blocked = false
-            blockReason = ''
-          }
           break
       }
     }
@@ -71,6 +69,15 @@ export class PolicyEngine {
     }
 
     const isRead = this.isReadAction(context.actionType)
+    if (!isRead && triggered.length === 0 && this.config.defaultAction === 'block') {
+      return R.ok({
+        action: isRead ? 'read' : 'write_escalated',
+        allowed: false,
+        rulesTriggered: [],
+        reason: 'Blocked by default policy posture',
+        requiresApproval: false
+      })
+    }
     return R.ok({
       action: isRead ? 'read' : 'write_safe',
       allowed: true,

@@ -7,6 +7,16 @@ import { Result as R } from '../core/result.js'
 import type { Receipt, Money } from '../core/types.js'
 import { ValidationError, InsufficientBalanceError, ChainError, NotFoundError } from '../core/errors.js'
 
+
+const MAINNET_USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+const DEVNET_USDC_MINT = '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU'
+
+const getUsdcMintForChain = (chain: ChainPort): PublicKey => {
+  const rpcEndpoint = 'rpcEndpoint' in chain && typeof chain.rpcEndpoint === 'string' ? chain.rpcEndpoint : ''
+  const mint = rpcEndpoint.includes('devnet') ? DEVNET_USDC_MINT : MAINNET_USDC_MINT
+  return new PublicKey(mint)
+}
+
 export interface SendTransferInput {
   walletId: string
   to: string
@@ -40,7 +50,7 @@ export class TransferService {
 
     // Check balance for USDC transfers
     if (input.amount.asset === 'USDC') {
-      const usdcMint = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')
+      const usdcMint = getUsdcMintForChain(this.chain)
       const balanceResult = await this.chain.getTokenBalance(ownerPubkey, usdcMint)
       if (!balanceResult.ok) return balanceResult
 
@@ -184,7 +194,7 @@ export class TransferService {
 
     // Check balance and build transaction based on asset
     if (input.amount.asset === 'USDC') {
-      const usdcMint = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')
+      const usdcMint = getUsdcMintForChain(this.chain)
       const balanceResult = await this.chain.getTokenBalance(ownerPubkey, usdcMint)
       if (!balanceResult.ok) return balanceResult
 

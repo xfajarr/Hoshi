@@ -19,6 +19,9 @@ export const WalletSchema = z.object({
     try { new PublicKey(val); return true } catch { return false }
   }, 'Invalid Solana public key'),
   label: z.string().optional(),
+  managed: z.boolean().optional(),
+  keystoreId: z.string().optional(),
+  defaultCluster: z.enum(['devnet', 'mainnet']).optional(),
   createdAt: z.string(),
   updatedAt: z.string()
 })

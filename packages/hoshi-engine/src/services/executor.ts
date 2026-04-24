@@ -110,7 +110,7 @@ export class ExecutionService {
     }
   }
 
-  async approve(approvalId: string, resolverId?: string): Promise<Result<ExecutionResult, Error>> {
+  async approve(approvalId: string, resolverId?: string, expectedWalletId?: string): Promise<Result<ExecutionResult, Error>> {
     const approvalResult = await this.approvalStore.get(approvalId)
     if (!approvalResult.ok) return approvalResult
     if (!approvalResult.value) {
@@ -131,6 +131,19 @@ export class ExecutionService {
     }
 
     const approval = approvalResult.value
+    if (expectedWalletId && approval.walletId !== expectedWalletId) {
+      return R.err(new Error(`Approval ${approvalId} does not belong to wallet ${expectedWalletId}`))
+    }
+    if (approval.status !== 'pending') {
+      return R.err(new Error(`Approval ${approvalId} is already ${approval.status}`))
+    }
+    if (approval.expiresAt && new Date(approval.expiresAt) < new Date()) {
+      approval.status = 'expired'
+      approval.resolvedAt = new Date().toISOString()
+      await this.approvalStore.update(approval)
+      return R.err(new Error(`Approval ${approvalId} has expired`))
+    }
+
     approval.status = 'approved'
     approval.resolvedBy = resolverId
     approval.resolvedAt = new Date().toISOString()
@@ -142,7 +155,7 @@ export class ExecutionService {
     })
   }
 
-  async reject(approvalId: string, resolverId?: string): Promise<Result<void, Error>> {
+  async reject(approvalId: string, resolverId?: string, expectedWalletId?: string): Promise<Result<void, Error>> {
     const approvalResult = await this.approvalStore.get(approvalId)
     if (!approvalResult.ok) return approvalResult
     if (!approvalResult.value) {
@@ -150,6 +163,19 @@ export class ExecutionService {
     }
 
     const approval = approvalResult.value
+    if (expectedWalletId && approval.walletId !== expectedWalletId) {
+      return R.err(new Error(`Approval ${approvalId} does not belong to wallet ${expectedWalletId}`))
+    }
+    if (approval.status !== 'pending') {
+      return R.err(new Error(`Approval ${approvalId} is already ${approval.status}`))
+    }
+    if (approval.expiresAt && new Date(approval.expiresAt) < new Date()) {
+      approval.status = 'expired'
+      approval.resolvedAt = new Date().toISOString()
+      await this.approvalStore.update(approval)
+      return R.err(new Error(`Approval ${approvalId} has expired`))
+    }
+
     approval.status = 'rejected'
     approval.resolvedBy = resolverId
     approval.resolvedAt = new Date().toISOString()

@@ -4,7 +4,7 @@ import type { Result } from '@hoshi/sdk'
 import { Result as R } from '@hoshi/sdk'
 
 export class InMemoryApprovalStore implements ApprovalStorePort {
-  private requests = new Map<string, ApprovalRequest>()
+  protected requests = new Map<string, ApprovalRequest>()
 
   async create(request: ApprovalRequest): Promise<Result<void, never>> {
     this.requests.set(request.id, request)

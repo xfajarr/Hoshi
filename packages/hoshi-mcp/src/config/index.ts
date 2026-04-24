@@ -7,15 +7,17 @@ export const ServerConfigSchema = z.object({
   
   // Signer (optional - if not provided, write operations require manual approval)
   keypairPath: z.string().optional(),
+  walletId: z.string().optional(),
+  walletPassword: z.string().optional(),
   
   // Policy
   policyEnabled: z.boolean().default(true),
   defaultAction: z.enum(['allow', 'block']).default('allow'),
   
   // Storage
-  storagePath: z.string().default('.hoshi/mcp-store.json'),
-  policyPath: z.string().default('.hoshi/mcp-policies.json'),
-  approvalPath: z.string().default('.hoshi/mcp-approvals.json'),
+  storagePath: z.string().default('.hoshi/store.json'),
+  policyPath: z.string().default('.hoshi/policies.json'),
+  approvalPath: z.string().default('.hoshi/approvals.json'),
   
   // Server
   transport: z.enum(['stdio', 'http', 'sse']).default('stdio'),
@@ -33,6 +35,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     rpcEndpoint: env.HOSHI_RPC_ENDPOINT,
     commitment: env.HOSHI_COMMITMENT,
     keypairPath: env.HOSHI_KEYPAIR_PATH,
+    walletId: env.HOSHI_WALLET_ID,
+    walletPassword: env.HOSHI_WALLET_PASSWORD,
     policyEnabled: env.HOSHI_POLICY_ENABLED === 'true' ? true : 
                    env.HOSHI_POLICY_ENABLED === 'false' ? false : undefined,
     defaultAction: env.HOSHI_DEFAULT_ACTION,

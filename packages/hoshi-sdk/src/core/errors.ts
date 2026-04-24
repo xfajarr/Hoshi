@@ -52,6 +52,21 @@ export class InsufficientBalanceError extends HoshiSDKError {
   }
 }
 
+
+export class AuthenticationError extends HoshiSDKError {
+  constructor(message: string = 'Invalid wallet password') {
+    super('AUTHENTICATION_ERROR', message, true)
+    this.name = 'AuthenticationError'
+  }
+}
+
+export class KeystoreError extends HoshiSDKError {
+  constructor(message: string, context?: Record<string, unknown>) {
+    super('KEYSTORE_ERROR', message, true, context)
+    this.name = 'KeystoreError'
+  }
+}
+
 export class UnauthorizedError extends HoshiSDKError {
   constructor(message: string = 'Unauthorized action') {
     super('UNAUTHORIZED', message, false)

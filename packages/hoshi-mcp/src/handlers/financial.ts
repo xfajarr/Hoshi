@@ -221,7 +221,12 @@ export function registerFinancialTools(context: ServerContext): void {
       }
       
       if (submit && context.signer) {
-        // Sign and send
+        const walletLookup = await walletService.getById(walletId)
+        if (!walletLookup.ok) throw new Error(walletLookup.error.message)
+        if (walletLookup.value.publicKey !== context.signer.publicKey) {
+          throw new Error(`Configured signer does not match wallet ${walletId}`)
+        }
+
         const result = await transferService.sendSigned(
           { walletId, to, amount: { amount, asset } },
           context.signer

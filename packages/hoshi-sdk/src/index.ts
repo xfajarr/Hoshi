@@ -27,3 +27,34 @@ export * from './services/yield.js'
 
 // Config
 export * from './config.js'
+
+// Token Registry & Constants (from t2000 SDK)
+export * from './constants.js'
+export * from './token-registry.js'
+
+// Contacts Manager (from t2000 SDK)
+export * from './contacts.js'
+
+// Safeguards/Enforcer (from t2000 SDK)
+export * from './safeguards/index.js'
+
+// Signer utilities
+export * from './signer.js'
+
+// Swap quote utilities
+export * from './swap-quote.js'
+
+// Wallet utilities
+export * from './wallet/index.js'
+
+// Browser wallet detection
+export * from './browser.js'
+
+// Main SDK class (re-exports everything from hoshi.ts)
+export {
+  Hoshi,
+  createHoshi,
+  initWallet,
+  unlockWallet,
+} from './hoshi.js'
+export type { HoshiOptions } from './hoshi.js'

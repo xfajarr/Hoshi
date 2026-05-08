@@ -67,8 +67,8 @@ export const registerFundStatus = (program: Command): void => {
         if (isJsonMode()) {
           printJson({
             walletId,
-            funded: false,
-            positions: balances.value ?? [],
+            funded: balances.ok && balances.value && balances.value.length > 0,
+            positions: balances.ok ? balances.value : [],
           })
           return
         }

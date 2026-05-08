@@ -1,4 +1,4 @@
-import { KeypairSigner } from '@hoshi/sdk'
+import { KeypairSigner, type Wallet } from '@hoshi/sdk'
 import { JsonFileStorage } from './store.js'
 import { getKeystoreVault } from './keystore.js'
 import { promptSecret } from './prompt.js'
@@ -40,7 +40,7 @@ export const ensureSignerMatchesWallet = async (
   storage: JsonFileStorage,
   walletId: string,
   signer: KeypairSigner,
-): Promise<ReturnType<typeof import('@hoshi/sdk').Wallet> | null> => {
+): Promise<Wallet | null> => {
   const walletResult = await storage.getWallet(walletId)
   if (!walletResult.ok || !walletResult.value) {
     console.error(`Wallet not found: ${walletId}`)

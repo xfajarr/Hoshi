@@ -55,7 +55,6 @@ export const registerSend = (program: Command): void => {
         const wallet = await ensureSignerMatchesWallet(storage, walletId, signer)
         if (!wallet) process.exit(1)
 
-        const chain = new (await import('@solana/web3.js')).Connection
         const solanaChain = new (await import('@hoshi/sdk')).SolanaChainAdapter(
           wallet.defaultCluster === 'mainnet'
             ? 'https://api.mainnet-beta.solana.com'

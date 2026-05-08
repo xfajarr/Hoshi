@@ -56,7 +56,6 @@ export const registerExportKey = (program: Command): void => {
           return
         }
 
-        const chain = new (await import('@solana/web3.js')).Connection
         const solanaChain = new (await import('@hoshi/sdk')).SolanaChainAdapter('https://api.devnet.solana.com')
         await solanaChain.connect()
 

@@ -134,7 +134,7 @@ export const registerInit = (program: Command): void => {
         console.log('  Step 2 of 3 — Connect AI platforms')
         printBlank()
 
-        if (options.noMcp) {
+        if (options['no-mcp']) {
           printInfo('Skipped — use: hoshi mcp install')
         } else {
           const platforms = getMcpPlatforms()
@@ -166,7 +166,7 @@ export const registerInit = (program: Command): void => {
         console.log('  Step 3 of 3 — Set safeguards')
         printBlank()
 
-        if (options.noSafeguards) {
+        if (options['no-safeguards']) {
           printInfo('Skipped — use: hoshi config set maxPerTx 500')
         } else {
           const maxPerTxVal = await input({

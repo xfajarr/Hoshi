@@ -41,11 +41,11 @@ export const registerHistory = (program: Command): void => {
       for (const receipt of recent) {
         const status = receipt.status === 'success' ? '✓' : '✗'
         const time = new Date(receipt.timestamp).toLocaleString()
-        console.log(`  ${status} ${receipt.type} — ${receipt.amount?.asset ?? ''} ${receipt.amount?.amount ?? ''}`)
-        console.log(`    To: ${receipt.recipient ?? 'N/A'}`)
+        console.log(`  ${status} ${receipt.actionType} — ${receipt.amount?.asset ?? ''} ${receipt.amount?.amount ?? ''}`)
+        console.log(`    ${receipt.description}`)
         console.log(`    Time: ${time}`)
-        if (receipt.metadata?.signature) {
-          console.log(`    Sig: ${receipt.metadata.signature.slice(0, 20)}...`)
+        if (receipt.signature) {
+          console.log(`    Sig: ${receipt.signature.slice(0, 20)}...`)
         }
         console.log('')
       }

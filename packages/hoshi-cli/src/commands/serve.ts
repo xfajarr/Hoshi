@@ -32,7 +32,7 @@ export const registerServe = (program: Command): void => {
         app.get('/wallets', async (c) => {
           const storage = new JsonFileStorage()
           const wallets = await storage.getWallets()
-          return c.json({ wallets: wallets.value ?? [] })
+          return c.json({ wallets: wallets.ok ? wallets.value : [] })
         })
 
         const port = parseInt(options.port, 10)

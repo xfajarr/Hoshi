@@ -33,6 +33,7 @@ import { registerServe } from './commands/serve.js'
 import { registerExportKey } from './commands/exportKey.js'
 import { registerGas, registerClaimRewards, registerFundStatus } from './commands/gas.js'
 import { registerPay, registerEarn } from './commands/pay.js'
+import { registerSwap } from './commands/swap.js'
 
 const DEFAULT_KEYSTORE_DIR = join(homedir(), '.hoshi', 'keys')
 
@@ -765,5 +766,6 @@ registerGas(program)
 registerClaimRewards(program)
 registerFundStatus(program)
 registerPay(program)
+registerSwap(program)
 
 program.parse()

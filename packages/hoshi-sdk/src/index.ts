@@ -58,11 +58,9 @@ export * from './kya/index.js'
 // Browser wallet detection
 export * from './browser.js'
 
-// Main SDK class (re-exports everything from hoshi.ts)
+// Main SDK class
 export {
   Hoshi,
   createHoshi,
-  initWallet,
-  unlockWallet,
 } from './hoshi.js'
 export type { CreateWalletInput, HoshiOptions } from './hoshi.js'

@@ -32,6 +32,7 @@ export type HoshiErrorCode =
   | 'INVALID_KEYSTORE'
   | 'KEYSTORE_DECRYPT_FAILED'
   | 'INVALID_PIN'
+  | 'INVALID_PASSWORD'
   | 'UNKNOWN';
 
 export interface HoshiErrorData {
@@ -120,14 +121,12 @@ export const SOLANA_ERROR_CODES: Record<number, string> = {
 };
 
 export function parseSolanaError(msg: string): string {
-  // Match anchor error format: "Program failed to complete: Custom error 0x1"
   const anchorMatch = msg.match(/Custom error (0x[0-9a-f]+)/i);
   if (anchorMatch) {
     const code = parseInt(anchorMatch[1], 16);
     return SOLANA_ERROR_CODES[code] ?? `Solana error: ${code}`;
   }
 
-  // Match general solana error
   const generalMatch = msg.match(/Error code: (\d+)/i);
   if (generalMatch) {
     const code = parseInt(generalMatch[1], 10);

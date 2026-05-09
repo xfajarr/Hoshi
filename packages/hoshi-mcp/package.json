@@ -35,7 +35,7 @@
   "dependencies": {
     "@hoshi/sdk": "workspace:*",
     "@hoshi/engine": "workspace:*",
-    "hono": "^4.12.14",
+    "hono": "^4.12.18",
     "@hono/node-server": "^2.0.0",
     "zod": "^4.0.0"
   }

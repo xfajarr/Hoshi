@@ -12,7 +12,7 @@ import { YieldService } from './services/yield.js'
 import { InvoiceService } from './services/invoice.js'
 import { ContactManager } from './contacts.js'
 import { KyaClient } from './kya/client.js'
-import { InMemoryKyaRegistry } from './kya/local-registry.js'
+import { KyaAnchorRegistry } from './kya/anchor-registry.js'
 import { SafeguardEnforcer } from './safeguards/enforcer.js'
 import { SafeguardError } from './safeguards/errors.js'
 import type { AccountSummary, HoshiConfig, Wallet, Receipt, SwapQuote } from './core/types.js'
@@ -159,7 +159,16 @@ export class Hoshi {
     this._invoiceService = new InvoiceService(this._storage)
     this._contacts = new ContactManager(options.configDir)
     this._safeguards = new SafeguardEnforcer(options.configDir)
-    this.kya = new KyaClient(new InMemoryKyaRegistry(), () => this.address)
+    this.kya = new KyaClient(
+      new KyaAnchorRegistry({
+        rpcEndpoint: this.config.rpcEndpoint,
+        commitment: this.config.commitment,
+        programId: new PublicKey(process.env.HOSHI_KYA_PROGRAM_ID ?? '11111111111111111111111111111111'),
+        walletOwner: () => this.address,
+        getSigner: () => this._signer,
+      }),
+      () => this.address,
+    )
   }
 
   private resolveWalletId(walletId?: string): string | null {
@@ -648,36 +657,3 @@ export class Hoshi {
 export function createHoshi(options?: HoshiOptions): Hoshi {
   return new Hoshi(options)
 }
-
-export async function initWallet(input: CreateKeystoreInput, keyPath?: string): Promise<{ address: string; walletId: string }> {
-  const vault = new EncryptedKeypairVault(keyPath ?? '~/.hoshi/keys')
-  const result = vault.create({
-    walletId: input.walletId,
-    pin: input.pin,
-    label: input.label,
-    defaultCluster: input.defaultCluster,
-  })
-
-  if (!result.ok) {
-    throw new HoshiError('INVALID_KEYSTORE', result.error.message)
-  }
-
-  return {
-    address: result.value.publicKey,
-    walletId: result.value.walletId,
-  }
-}
-
-export async function unlockWallet(walletId: string, pin: string, keyPath?: string): Promise<KeypairSigner> {
-  const vault = new EncryptedKeypairVault(keyPath ?? '~/.hoshi/keys')
-   const result = vault.unlock(walletId, pin)
-
-  if (!result.ok) {
-    throw new HoshiError('INVALID_PIN', result.error.message)
-  }
-
-  return result.value
-}
-
-export { Hoshi as Client }
-export default Hoshi

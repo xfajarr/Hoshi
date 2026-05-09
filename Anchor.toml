@@ -7,4 +7,4 @@ cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [programs.localnet]
-hoshi_kya = "11111111111111111111111111111111"
+hoshi_kya = "7QaaaMxxPavk8KRZwS5WwbPzPmRkXPtjFmfxh2M8ev1Z"

@@ -9,10 +9,14 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "dev": "turbo run dev",
-    "clean": "turbo run clean"
+    "clean": "turbo run clean",
+    "anchor:build": "anchor build",
+    "anchor:test": "anchor test",
+    "smoke:corebank": "node scripts/core-banking-smoke.mjs"
   },
   "devDependencies": {
     "@hoshi/cli": "workspace:*",
+    "@hoshi/sdk": "workspace:*",
     "@hono/node-server": "^2.0.0",
     "@types/bn.js": "^5.2.0",
     "turbo": "^2.0.0",

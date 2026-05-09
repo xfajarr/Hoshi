@@ -11,6 +11,14 @@ import { ValidationError, InsufficientBalanceError, ChainError, NotFoundError } 
 const MAINNET_USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
 const DEVNET_USDC_MINT = '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU'
 
+const normalizeSendReceipt = (receipt: Receipt, to: string, extras: Partial<Pick<Receipt, 'signature' | 'explorerUrl' | 'metadata'>> = {}): Receipt => ({
+  ...receipt,
+  to,
+  signature: extras.signature ?? receipt.signature,
+  explorerUrl: extras.explorerUrl ?? receipt.explorerUrl,
+  metadata: extras.metadata ?? receipt.metadata,
+})
+
 const getUsdcMintForChain = (chain: ChainPort): PublicKey => {
   const rpcEndpoint = 'rpcEndpoint' in chain && typeof chain.rpcEndpoint === 'string' ? chain.rpcEndpoint : ''
   const mint = rpcEndpoint.includes('devnet') ? DEVNET_USDC_MINT : MAINNET_USDC_MINT
@@ -80,10 +88,10 @@ export class TransferService {
         walletId: wallet.id,
         status: 'success',
         amount: input.amount,
+        to: input.to,
         description: `Transfer ${input.amount.amount} ${input.amount.asset} to ${input.to}`,
         timestamp: new Date().toISOString(),
         metadata: {
-          to: input.to,
           serializedTransaction: txResult.value.serialize({ requireAllSignatures: false }).toString('base64')
         }
       }
@@ -111,9 +119,9 @@ export class TransferService {
       walletId: wallet.id,
       status: 'success',
       amount: input.amount,
+      to: input.to,
       description: `Transfer ${input.amount.amount} ${input.amount.asset} to ${input.to}`,
       timestamp: new Date().toISOString(),
-      metadata: { to: input.to }
     }
 
     await this.storage.saveReceipt(receipt)
@@ -150,22 +158,21 @@ export class TransferService {
       }
     )
     if (!sendResult.ok) {
-      // Update receipt to failed status
-      receipt.status = 'failed'
-      receipt.metadata = { ...receipt.metadata, error: sendResult.error.message }
-      await this.storage.saveReceipt(receipt)
+      const failedReceipt = normalizeSendReceipt(receipt, receipt.to ?? input.to, {
+        metadata: { ...receipt.metadata, error: sendResult.error.message },
+      })
+      failedReceipt.status = 'failed'
+      await this.storage.saveReceipt(failedReceipt)
       return R.err(sendResult.error as ChainError)
     }
 
-    // Confirm transaction
-    receipt.status = 'success'
-    receipt.metadata = { 
-      ...receipt.metadata, 
+    const successReceipt = normalizeSendReceipt(receipt, receipt.to ?? input.to, {
       signature: sendResult.value,
-      explorerUrl: `https://explorer.solana.com/tx/${sendResult.value}?cluster=devnet`
-    }
-    await this.storage.saveReceipt(receipt)
-    return R.ok(receipt)
+      explorerUrl: `https://explorer.solana.com/tx/${sendResult.value}?cluster=devnet`,
+    })
+    successReceipt.status = 'success'
+    await this.storage.saveReceipt(successReceipt)
+    return R.ok(successReceipt)
   }
 
   /**
@@ -223,9 +230,9 @@ export class TransferService {
         walletId: wallet.id,
         status: 'pending',
         amount: input.amount,
+        to: input.to,
         description: `Transfer ${input.amount.amount} ${input.amount.asset} to ${input.to}`,
         timestamp: new Date().toISOString(),
-        metadata: { to: input.to }
       }
 
       return R.ok({ transaction: txResult.value, receipt })
@@ -260,9 +267,9 @@ export class TransferService {
       walletId: wallet.id,
       status: 'pending',
       amount: input.amount,
+      to: input.to,
       description: `Transfer ${input.amount.amount} ${input.amount.asset} to ${input.to}`,
       timestamp: new Date().toISOString(),
-      metadata: { to: input.to }
     }
 
     return R.ok({ transaction, receipt })

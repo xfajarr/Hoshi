@@ -27,6 +27,9 @@ importers:
       '@hoshi/cli':
         specifier: workspace:*
         version: link:packages/hoshi-cli
+      '@hoshi/sdk':
+        specifier: workspace:*
+        version: link:packages/hoshi-sdk
       '@types/bn.js':
         specifier: ^5.2.0
         version: 5.2.0

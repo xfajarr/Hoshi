@@ -54,7 +54,7 @@ export class InsufficientBalanceError extends HoshiSDKError {
 
 
 export class AuthenticationError extends HoshiSDKError {
-  constructor(message: string = 'Invalid wallet password') {
+  constructor(message: string = 'Invalid wallet PIN') {
     super('AUTHENTICATION_ERROR', message, true)
     this.name = 'AuthenticationError'
   }

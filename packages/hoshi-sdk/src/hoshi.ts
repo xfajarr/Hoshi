@@ -11,8 +11,15 @@ import { SwapService } from './services/swap.js'
 import { YieldService } from './services/yield.js'
 import { InvoiceService } from './services/invoice.js'
 import { ContactManager } from './contacts.js'
+import { KyaClient } from './kya/client.js'
+import { InMemoryKyaRegistry } from './kya/local-registry.js'
 import { SafeguardEnforcer } from './safeguards/enforcer.js'
-import type { HoshiConfig, Wallet, Receipt, SwapQuote } from './core/types.js'
+import { SafeguardError } from './safeguards/errors.js'
+import type { AccountSummary, HoshiConfig, Wallet, Receipt, SwapQuote } from './core/types.js'
+import { HoshiSDKError } from './core/errors.js'
+import type { MppPaymentIntent, X402PaymentRequirement } from './payments/types.js'
+import { toMppPaymentIntent } from './payments/mpp.js'
+import { toX402PaymentRequirement } from './payments/x402.js'
 import type { StoragePort } from './ports/storage.js'
 import type { SignerPort } from './ports/signer.js'
 import type { ChainPort } from './ports/chain.js'
@@ -24,7 +31,7 @@ import {
   DEFAULT_RPC_URL,
   SUPPORTED_ASSETS,
 } from './constants.js'
-
+import { OUTBOUND_OPS, type SafeguardOutcome, type TxMetadata } from './safeguards/types.js'
 export { HoshiError, mapSolanaError, isRetryableError }
 export * from './errors.js'
 export * from './constants.js'
@@ -34,6 +41,67 @@ export * from './contacts.js'
 export * from './signer.js'
 export * from './wallet/index.js'
 export * from './swap-quote.js'
+
+const RECENT_ACTIVITY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+
+function toTransferError(error: unknown): HoshiError {
+  if (error instanceof HoshiError) {
+    return error
+  }
+
+  const code = typeof error === 'object' && error !== null && 'code' in error
+    ? String((error as { code?: unknown }).code)
+    : null
+  const context = typeof error === 'object' && error !== null && 'context' in error
+    ? (error as { context?: Record<string, unknown> }).context
+    : undefined
+  const detail = typeof error === 'object' && error !== null && 'detail' in error
+    ? (error as { detail?: Record<string, unknown> }).detail
+    : undefined
+
+  if (error instanceof SafeguardError || (typeof error === 'object' && error !== null && 'detail' in error && code && code !== 'VALIDATION_ERROR')) {
+    return new HoshiError('SAFEGUARD_BLOCKED', 'Transfer blocked by safeguard', {
+      safeguard: code ?? 'unknown',
+      ...detail,
+    })
+  }
+
+  if (code === 'VALIDATION_ERROR') {
+    const message = typeof error === 'object' && error !== null && 'message' in error
+      ? String((error as { message?: unknown }).message)
+      : 'Validation failed'
+    const normalizedCode = context?.to ? 'INVALID_ADDRESS' : 'INVALID_AMOUNT'
+    return new HoshiError(normalizedCode, message, context, true)
+  }
+
+  if (code === 'INSUFFICIENT_BALANCE') {
+    const message = typeof error === 'object' && error !== null && 'message' in error
+      ? String((error as { message?: unknown }).message)
+      : 'Insufficient balance'
+    return new HoshiError('INSUFFICIENT_BALANCE', message, context, true)
+  }
+
+  if (code === 'NOT_FOUND') {
+    const message = typeof error === 'object' && error !== null && 'message' in error
+      ? String((error as { message?: unknown }).message)
+      : 'Resource not found'
+    return new HoshiError('WALLET_NOT_FOUND', message, context, true)
+  }
+
+  if (code === 'CHAIN_ERROR') {
+    const message = typeof error === 'object' && error !== null && 'message' in error
+      ? String((error as { message?: unknown }).message)
+      : 'Transaction failed'
+    return new HoshiError('TRANSACTION_FAILED', message, context, false)
+  }
+
+  if (error instanceof HoshiSDKError) {
+    return new HoshiError('TRANSACTION_FAILED', error.message, error.context, error.recoverable)
+  }
+
+  const message = error instanceof Error ? error.message : String(error)
+  return new HoshiError('TRANSACTION_FAILED', message, undefined, true)
+}
 
 export interface HoshiOptions {
   rpcUrl?: string
@@ -45,7 +113,14 @@ export interface HoshiOptions {
   yieldProvider?: YieldProviderPort
 }
 
+export interface CreateWalletInput {
+  pin?: string
+  label?: string
+  cluster?: 'devnet' | 'mainnet'
+}
+
 export class Hoshi {
+  public readonly kya: KyaClient
   private readonly config: HoshiConfig
   private readonly vault: EncryptedKeypairVault
   private _chain: ChainPort
@@ -84,6 +159,17 @@ export class Hoshi {
     this._invoiceService = new InvoiceService(this._storage)
     this._contacts = new ContactManager(options.configDir)
     this._safeguards = new SafeguardEnforcer(options.configDir)
+    this.kya = new KyaClient(new InMemoryKyaRegistry(), () => this.address)
+  }
+
+  private resolveWalletId(walletId?: string): string | null {
+    return walletId ?? this._wallet?.id ?? null
+  }
+
+  private requireWalletId(walletId?: string, message = 'No wallet loaded'): string {
+    const resolvedWalletId = this.resolveWalletId(walletId)
+    if (!resolvedWalletId) throw new HoshiError('WALLET_NOT_FOUND', message)
+    return resolvedWalletId
   }
 
   get chain(): ChainPort {
@@ -122,6 +208,26 @@ export class Hoshi {
     return this._safeguards
   }
 
+  addContact(name: string, address: string, label?: string): { action: 'added' | 'updated' } {
+    return this._contacts.add(name, address, label)
+  }
+
+  removeContact(name: string): boolean {
+    return this._contacts.remove(name)
+  }
+
+  getContact(name: string): { name: string; address: string; label?: string } | null {
+    return this._contacts.get(name) ?? null
+  }
+
+  listContacts(): { name: string; address: string; label?: string }[] {
+    return this._contacts.list()
+  }
+
+  resolveContact(nameOrAddress: string): { address: string; contactName?: string } {
+    return this._contacts.resolve(nameOrAddress)
+  }
+
   get signer(): SignerPort | null {
     return this._signer
   }
@@ -156,15 +262,16 @@ export class Hoshi {
     this._wallet = null
   }
 
-  async createWallet(input: {
-    label?: string
-    cluster?: 'devnet' | 'mainnet'
-  }): Promise<{ walletId: string; publicKey: string }> {
+  async createWallet(input: CreateWalletInput): Promise<{ walletId: string; publicKey: string }> {
     const walletId = crypto.randomUUID()
+    const pin = input.pin
+    if (typeof pin !== 'string' || pin.trim().length === 0) {
+      throw new HoshiError('INVALID_PIN', 'Wallet PIN is required')
+    }
 
     const vaultResult = this.vault.create({
       walletId,
-      password: '',
+      pin,
       label: input.label,
       defaultCluster: input.cluster ?? DEFAULT_NETWORK,
     })
@@ -192,7 +299,7 @@ export class Hoshi {
     }
   }
 
-  async loadWallet(walletId: string, password: string): Promise<Wallet | null> {
+  async loadWallet(walletId: string, pin: string): Promise<Wallet | null> {
     const walletResult = await this._storage.getWallet(walletId)
     if (!walletResult.ok || !walletResult.value) return null
 
@@ -200,7 +307,7 @@ export class Hoshi {
 
     if (!wallet.managed || !wallet.keystoreId) return null
 
-    const unlockResult = this.vault.unlock(wallet.keystoreId, password)
+    const unlockResult = this.vault.unlock(wallet.keystoreId, pin)
     if (!unlockResult.ok) return null
 
     this._signer = unlockResult.value
@@ -232,12 +339,62 @@ export class Hoshi {
     return result.value
   }
 
+  async balance(asset: 'SOL' | 'USDC' = 'SOL'): Promise<string> {
+    return this.getBalance(asset)
+  }
+
   async getBalances(): Promise<{ SOL: string; USDC: string }> {
     const [sol, usdc] = await Promise.all([
       this.getBalance('SOL'),
       this.getBalance('USDC'),
     ])
     return { SOL: sol, USDC: usdc }
+  }
+
+  async balances(): Promise<{ SOL: string; USDC: string }> {
+    return this.getBalances()
+  }
+
+  async getAccountSummary(): Promise<AccountSummary> {
+    const summary: AccountSummary = {
+      walletId: this._wallet?.id ?? null,
+      publicKey: this._wallet?.publicKey ?? null,
+      connected: this.isConnected,
+      balances: { SOL: null, USDC: null },
+      available: { SOL: null, USDC: null },
+      activity: { receiptCount: 0, recentReceiptCount: 0 },
+    }
+
+    if (!summary.walletId) {
+      return summary
+    }
+
+    const [solResult, usdcResult, receiptsResult] = await Promise.all([
+      this._walletService.getOnChainBalance(summary.walletId, 'SOL'),
+      this._walletService.getOnChainBalance(summary.walletId, 'USDC'),
+      this._storage.getReceipts(summary.walletId),
+    ])
+
+    if (solResult.ok) {
+      summary.balances.SOL = solResult.value
+      summary.available.SOL = solResult.value
+    }
+
+    if (usdcResult.ok) {
+      summary.balances.USDC = usdcResult.value
+      summary.available.USDC = usdcResult.value
+    }
+
+    if (receiptsResult.ok) {
+      const now = Date.now()
+      summary.activity.receiptCount = receiptsResult.value.length
+      summary.activity.recentReceiptCount = receiptsResult.value.filter(receipt => {
+        const timestamp = Date.parse(receipt.timestamp)
+        return Number.isFinite(timestamp) && now - timestamp <= RECENT_ACTIVITY_WINDOW_MS
+      }).length
+    }
+
+    return summary
   }
 
   async transfer(input: {
@@ -247,7 +404,18 @@ export class Hoshi {
   }): Promise<Receipt> {
     if (!this._signer) throw new HoshiError('WALLET_NOT_FOUND', 'No signer set')
 
-    this._safeguards.assertNotLocked()
+    const safeguardOutcome = this.checkSafeguard({
+      operation: 'transfer',
+      amount: Number(input.amount),
+      asset: input.asset,
+    })
+    if (safeguardOutcome.status !== 'allowed') {
+      throw new HoshiError('SAFEGUARD_BLOCKED', safeguardOutcome.status === 'pending_approval'
+        ? 'Transfer requires approval'
+        : 'Transfer blocked by safeguard', {
+        safeguardOutcome,
+      }, safeguardOutcome.status === 'pending_approval')
+    }
 
     const result = await this._transferService.sendSigned(
       {
@@ -258,8 +426,72 @@ export class Hoshi {
       this._signer,
     )
 
-    if (!result.ok) throw new HoshiError('TRANSACTION_FAILED', result.error.message)
+    if (!result.ok) throw toTransferError(result.error)
     return result.value
+  }
+
+  async send(input: {
+    to: string
+    amount: string
+    asset: 'SOL' | 'USDC'
+  }): Promise<Receipt> {
+    return this.transfer(input)
+  }
+
+  async pay(input: {
+    to: string
+    amount: string
+    asset: 'SOL' | 'USDC'
+  }): Promise<Receipt> {
+    return this.transfer(input)
+  }
+
+  async receive(input: {
+    amount: string
+    asset: 'SOL' | 'USDC'
+    description: string
+    walletId?: string
+    expiresInHours?: number
+  }): Promise<X402PaymentRequirement> {
+    const walletId = this.requireWalletId(input.walletId)
+
+    const result = await this._invoiceService.createInvoice({
+      walletId,
+      amount: { amount: input.amount, asset: input.asset },
+      description: input.description,
+      expiresInHours: input.expiresInHours,
+    })
+
+    if (!result.ok) {
+      const code = result.error.code === 'NOT_FOUND' ? 'WALLET_NOT_FOUND' : 'INVALID_AMOUNT'
+      throw new HoshiError(code, result.error.message)
+    }
+
+    return toX402PaymentRequirement(result.value)
+  }
+
+  async createPaymentLink(input: {
+    amount: string
+    asset: 'SOL' | 'USDC'
+    description: string
+    walletId?: string
+    expiresInHours?: number
+  }): Promise<MppPaymentIntent> {
+    const walletId = this.requireWalletId(input.walletId)
+
+    const result = await this._invoiceService.createPaymentLink({
+      walletId,
+      amount: { amount: input.amount, asset: input.asset },
+      description: input.description,
+      expiresInHours: input.expiresInHours,
+    })
+
+    if (!result.ok) {
+      const code = result.error.code === 'NOT_FOUND' ? 'WALLET_NOT_FOUND' : 'INVALID_AMOUNT'
+      throw new HoshiError(code, result.error.message)
+    }
+
+    return toMppPaymentIntent(result.value)
   }
 
   async swap(input: {
@@ -270,7 +502,17 @@ export class Hoshi {
   }): Promise<Receipt> {
     if (!this._signer) throw new HoshiError('WALLET_NOT_FOUND', 'No signer set')
 
-    this._safeguards.assertNotLocked()
+    const safeguardOutcome = this.checkSafeguard({
+      operation: 'swap',
+      amount: Number(input.amount),
+    })
+    if (safeguardOutcome.status !== 'allowed') {
+      throw new HoshiError('SAFEGUARD_BLOCKED', safeguardOutcome.status === 'pending_approval'
+        ? 'Swap requires approval'
+        : 'Swap blocked by safeguard', {
+        safeguardOutcome,
+      }, safeguardOutcome.status === 'pending_approval')
+    }
 
     const quoteResult = await this._swapProvider.getQuote({
       inputMint: input.inputMint,
@@ -308,12 +550,78 @@ export class Hoshi {
   }
 
   async getReceipts(walletId?: string): Promise<Receipt[]> {
-    const id = walletId ?? this._wallet?.id
-    if (!id) throw new HoshiError('WALLET_NOT_FOUND', 'No wallet ID provided')
+    const id = this.requireWalletId(walletId, 'No wallet ID provided')
 
     const result = await this._storage.getReceipts(id)
     if (!result.ok) return []
     return result.value
+  }
+
+  async receipts(walletId?: string): Promise<Receipt[]> {
+    return this.getReceipts(walletId)
+  }
+
+  async getHistory(walletId?: string): Promise<Receipt[]> {
+    return this.getReceipts(walletId)
+  }
+
+  async history(walletId?: string): Promise<Receipt[]> {
+    return this.getHistory(walletId)
+  }
+
+  async getReceipt(receiptId: string): Promise<Receipt | null> {
+    const result = await this._storage.getReceipt(receiptId)
+    if (!result.ok) return null
+    return result.value
+  }
+
+  async getRecentHistory(walletId?: string, windowMs = RECENT_ACTIVITY_WINDOW_MS): Promise<Receipt[]> {
+    const receipts = await this.getHistory(walletId)
+    const now = Date.now()
+    return receipts.filter(receipt => {
+      const timestamp = Date.parse(receipt.timestamp)
+      return Number.isFinite(timestamp) && now - timestamp <= windowMs
+    })
+  }
+
+  checkSafeguard(metadata: TxMetadata): SafeguardOutcome {
+    const config = this._safeguards.getConfig()
+
+    if (config.locked) {
+      return { status: 'pending_approval', safeguard: 'locked', detail: {} }
+    }
+
+    if (!OUTBOUND_OPS.has(metadata.operation)) {
+      return { status: 'allowed' }
+    }
+
+    const amount = metadata.amount ?? 0
+
+    if (config.maxPerTx > 0 && amount > config.maxPerTx) {
+      return {
+        status: 'blocked',
+        safeguard: 'maxPerTx',
+        detail: { attempted: amount, limit: config.maxPerTx },
+      }
+    }
+
+    const dailyUsed = config.dailyResetDate === new Date().toISOString().slice(0, 10)
+      ? config.dailyUsed
+      : 0
+
+    if (config.maxDailySend > 0 && dailyUsed + amount > config.maxDailySend) {
+      return {
+        status: 'blocked',
+        safeguard: 'maxDailySend',
+        detail: {
+          attempted: amount,
+          limit: config.maxDailySend,
+          current: dailyUsed,
+        },
+      }
+    }
+
+    return { status: 'allowed' }
   }
 
   static validatePublicKey(publicKey: string): boolean {
@@ -345,7 +653,7 @@ export async function initWallet(input: CreateKeystoreInput, keyPath?: string): 
   const vault = new EncryptedKeypairVault(keyPath ?? '~/.hoshi/keys')
   const result = vault.create({
     walletId: input.walletId,
-    password: input.password,
+    pin: input.pin,
     label: input.label,
     defaultCluster: input.defaultCluster,
   })
@@ -360,12 +668,12 @@ export async function initWallet(input: CreateKeystoreInput, keyPath?: string): 
   }
 }
 
-export async function unlockWallet(walletId: string, password: string, keyPath?: string): Promise<KeypairSigner> {
+export async function unlockWallet(walletId: string, pin: string, keyPath?: string): Promise<KeypairSigner> {
   const vault = new EncryptedKeypairVault(keyPath ?? '~/.hoshi/keys')
-  const result = vault.unlock(walletId, password)
+   const result = vault.unlock(walletId, pin)
 
   if (!result.ok) {
-    throw new HoshiError('INVALID_PASSWORD', result.error.message)
+    throw new HoshiError('INVALID_PIN', result.error.message)
   }
 
   return result.value

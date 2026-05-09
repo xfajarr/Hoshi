@@ -56,8 +56,10 @@ export const ReceiptSchema = z.object({
   status: z.enum(['pending', 'success', 'failed', 'pending_approval']),
   amount: MoneySchema.optional(),
   fee: MoneySchema.optional(),
-  description: z.string(),
+  to: z.string().optional(),
   signature: z.string().optional(),
+  explorerUrl: z.string().url().optional(),
+  description: z.string(),
   timestamp: z.string(),
   metadata: z.record(z.string(), z.unknown()).optional()
 })
@@ -147,6 +149,24 @@ export const BalanceSchema = z.object({
   usdValue: z.string().optional()
 })
 export type Balance = z.infer<typeof BalanceSchema>
+
+export interface AccountSummary {
+  walletId: string | null
+  publicKey: string | null
+  connected: boolean
+  balances: {
+    SOL: string | null
+    USDC: string | null
+  }
+  available: {
+    SOL: string | null
+    USDC: string | null
+  }
+  activity: {
+    receiptCount: number
+    recentReceiptCount: number
+  }
+}
 
 // Action request
 export const ActionRequestSchema = z.object({

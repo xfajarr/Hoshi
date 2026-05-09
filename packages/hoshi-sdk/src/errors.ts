@@ -31,7 +31,7 @@ export type HoshiErrorCode =
   | 'SWAP_FAILED'
   | 'INVALID_KEYSTORE'
   | 'KEYSTORE_DECRYPT_FAILED'
-  | 'INVALID_PASSWORD'
+  | 'INVALID_PIN'
   | 'UNKNOWN';
 
 export interface HoshiErrorData {
@@ -74,7 +74,7 @@ export function mapWalletError(error: unknown): HoshiError {
     return new HoshiError('INSUFFICIENT_BALANCE', 'Insufficient balance');
   }
   if (msg.includes('incorrect') || msg.includes('invalid') || msg.includes('wrong')) {
-    return new HoshiError('INVALID_PASSWORD', 'Invalid password or keystore');
+    return new HoshiError('INVALID_PIN', 'Invalid PIN or keystore');
   }
 
   return new HoshiError('UNKNOWN', msg, undefined, true);

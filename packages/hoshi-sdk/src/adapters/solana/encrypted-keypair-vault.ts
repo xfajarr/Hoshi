@@ -43,7 +43,7 @@ export interface EncryptedKeypairKeystore {
 
 export interface CreateKeystoreInput {
   walletId: string
-  password: string
+  pin: string
   label?: string
   defaultCluster?: 'devnet' | 'mainnet'
 }
@@ -65,13 +65,13 @@ export class EncryptedKeypairVault {
     const walletIdResult = this.validateWalletId(input.walletId)
     if (!walletIdResult.ok) return walletIdResult
 
-    const passwordResult = this.validatePassword(input.password)
-    if (!passwordResult.ok) return passwordResult
+    const pinResult = this.validatePin(input.pin)
+    if (!pinResult.ok) return pinResult
 
     const keypair = Keypair.generate()
     const createdAt = new Date().toISOString()
     const defaultCluster = input.defaultCluster ?? 'devnet'
-    const encrypted = this.encryptSecretKey(keypair.secretKey, input.password)
+    const encrypted = this.encryptSecretKey(keypair.secretKey, input.pin)
 
     const keystore: EncryptedKeypairKeystore = {
       version: 1,
@@ -106,20 +106,20 @@ export class EncryptedKeypairVault {
     return this.readFromPath(keystorePath)
   }
 
-  unlock(walletId: string, password: string): Result<KeypairSigner, AuthenticationError | KeystoreError | ValidationError> {
+  unlock(walletId: string, pin: string): Result<KeypairSigner, AuthenticationError | KeystoreError | ValidationError> {
     const keystoreResult = this.read(walletId)
     if (!keystoreResult.ok) return keystoreResult
     if (!keystoreResult.value) {
       return R.err(new KeystoreError(`Managed wallet keystore not found for wallet ${walletId}`))
     }
 
-    return this.unlockKeystore(keystoreResult.value, password)
+    return this.unlockKeystore(keystoreResult.value, pin)
   }
 
-  unlockFromPath(filePath: string, password: string): Result<KeypairSigner, AuthenticationError | KeystoreError | ValidationError> {
+  unlockFromPath(filePath: string, pin: string): Result<KeypairSigner, AuthenticationError | KeystoreError | ValidationError> {
     const keystoreResult = this.readFromPath(filePath)
     if (!keystoreResult.ok) return keystoreResult
-    return this.unlockKeystore(keystoreResult.value, password)
+    return this.unlockKeystore(keystoreResult.value, pin)
   }
 
   export(walletId: string, outputPath: string): Result<string, KeystoreError | ValidationError> {
@@ -159,15 +159,15 @@ export class EncryptedKeypairVault {
 
   private unlockKeystore(
     keystore: EncryptedKeypairKeystore,
-    password: string,
+    pin: string,
   ): Result<KeypairSigner, AuthenticationError | KeystoreError | ValidationError> {
-    const passwordResult = this.validatePassword(password)
-    if (!passwordResult.ok) return passwordResult
+    const pinResult = this.validatePin(pin)
+    if (!pinResult.ok) return pinResult
 
     try {
-      const secretKey = this.decryptSecretKey(keystore, password)
+      const secretKey = this.decryptSecretKey(keystore, pin)
       if (secretKey.byteLength !== 64) {
-        throw new AuthenticationError('Failed to unlock wallet. Check your password and try again.')
+        throw new AuthenticationError('Failed to unlock wallet. Check your PIN and try again.')
       }
 
       const keypair = Keypair.fromSecretKey(secretKey)
@@ -181,7 +181,7 @@ export class EncryptedKeypairVault {
         return R.err(error)
       }
 
-      return R.err(new AuthenticationError('Failed to unlock wallet. Check your password and try again.'))
+      return R.err(new AuthenticationError('Failed to unlock wallet. Check your PIN and try again.'))
     }
   }
 
@@ -233,18 +233,18 @@ export class EncryptedKeypairVault {
     return R.ok(undefined)
   }
 
-  private validatePassword(password: string): Result<void, ValidationError> {
-    if (password.length < 8) {
-      return R.err(new ValidationError('Wallet password must be at least 8 characters long'))
+  private validatePin(pin: string): Result<void, ValidationError> {
+    if (pin.length < 8) {
+      return R.err(new ValidationError('Wallet PIN must be at least 8 characters long'))
     }
 
     return R.ok(undefined)
   }
 
-  private encryptSecretKey(secretKey: Uint8Array, password: string): EncryptedKeypairKeystore['crypto'] {
+  private encryptSecretKey(secretKey: Uint8Array, pin: string): EncryptedKeypairKeystore['crypto'] {
     const salt = randomBytes(SALT_LENGTH)
     const nonce = randomBytes(NONCE_LENGTH)
-    const key = scryptSync(password, salt, KEY_LENGTH, {
+    const key = scryptSync(pin, salt, KEY_LENGTH, {
       N: SCRYPT_COST,
       r: SCRYPT_BLOCK_SIZE,
       p: SCRYPT_PARALLELIZATION,
@@ -271,13 +271,13 @@ export class EncryptedKeypairVault {
     }
   }
 
-  private decryptSecretKey(keystore: EncryptedKeypairKeystore, password: string): Uint8Array {
+  private decryptSecretKey(keystore: EncryptedKeypairKeystore, pin: string): Uint8Array {
     try {
       const salt = Buffer.from(keystore.crypto.params.salt, 'base64')
       const nonce = Buffer.from(keystore.crypto.nonce, 'base64')
       const ciphertext = Buffer.from(keystore.crypto.ciphertext, 'base64')
       const authTag = Buffer.from(keystore.crypto.authTag, 'base64')
-      const key = scryptSync(password, salt, keystore.crypto.params.keyLength, {
+      const key = scryptSync(pin, salt, keystore.crypto.params.keyLength, {
         N: keystore.crypto.params.cost,
         r: keystore.crypto.params.blockSize,
         p: keystore.crypto.params.parallelization,
@@ -289,7 +289,7 @@ export class EncryptedKeypairVault {
       const secretKey = Buffer.concat([decipher.update(ciphertext), decipher.final()])
       return new Uint8Array(secretKey)
     } catch {
-      throw new AuthenticationError('Failed to unlock wallet. Check your password and try again.')
+      throw new AuthenticationError('Failed to unlock wallet. Check your PIN and try again.')
     }
   }
 }

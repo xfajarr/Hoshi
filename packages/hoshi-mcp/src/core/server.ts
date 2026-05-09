@@ -18,6 +18,7 @@ import {
   type PaymentLink,
   type YieldPosition
 } from '@hoshi/sdk'
+import type { ChainPort } from '@hoshi/sdk'
 import { 
   PolicyEngine, 
   ExecutionService,
@@ -183,6 +184,7 @@ class McpJsonApprovalStore extends InMemoryApprovalStore {
  */
 export interface ServerContext {
   config: ServerConfig
+  chain: ChainPort
   storage: McpJsonStorage
   policyStore: McpJsonPolicyStore
   approvalStore: McpJsonApprovalStore
@@ -254,6 +256,7 @@ export async function createServerContext(config: ServerConfig): Promise<ServerC
   
   return {
     config,
+    chain,
     storage,
     policyStore,
     approvalStore,

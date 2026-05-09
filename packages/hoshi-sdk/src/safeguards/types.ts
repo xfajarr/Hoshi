@@ -14,6 +14,27 @@ export interface TxMetadata {
   asset?: string;
 }
 
+export interface SafeguardAllowedOutcome {
+  status: 'allowed'
+}
+
+export interface SafeguardPendingApprovalOutcome {
+  status: 'pending_approval'
+  safeguard: 'locked'
+  detail: Record<string, unknown>
+}
+
+export interface SafeguardBlockedOutcome {
+  status: 'blocked'
+  safeguard: string
+  detail: Record<string, unknown>
+}
+
+export type SafeguardOutcome =
+  | SafeguardAllowedOutcome
+  | SafeguardPendingApprovalOutcome
+  | SafeguardBlockedOutcome
+
 export const OUTBOUND_OPS = new Set<TxMetadata['operation']>([
   'transfer',
   'pay',

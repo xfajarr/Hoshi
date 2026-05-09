@@ -44,8 +44,16 @@ export * from './signer.js'
 // Swap quote utilities
 export * from './swap-quote.js'
 
+// Payments
+export * from './payments/types.js'
+export * from './payments/x402.js'
+export * from './payments/mpp.js'
+
 // Wallet utilities
 export * from './wallet/index.js'
+
+// KYA primitives
+export * from './kya/index.js'
 
 // Browser wallet detection
 export * from './browser.js'
@@ -57,4 +65,4 @@ export {
   initWallet,
   unlockWallet,
 } from './hoshi.js'
-export type { HoshiOptions } from './hoshi.js'
+export type { CreateWalletInput, HoshiOptions } from './hoshi.js'

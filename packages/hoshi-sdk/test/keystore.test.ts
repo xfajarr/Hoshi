@@ -20,7 +20,7 @@ describe('EncryptedKeypairVault', () => {
 
     const createResult = vault.create({
       walletId: crypto.randomUUID(),
-      password: 'very-secure-password',
+      pin: 'very-secure-pin',
       label: 'Agent Wallet',
       defaultCluster: 'devnet',
     })
@@ -28,26 +28,26 @@ describe('EncryptedKeypairVault', () => {
     expect(createResult.ok).toBe(true)
     if (!createResult.ok) return
 
-    const unlockResult = vault.unlock(createResult.value.walletId, 'very-secure-password')
+    const unlockResult = vault.unlock(createResult.value.walletId, 'very-secure-pin')
     expect(unlockResult.ok).toBe(true)
     if (!unlockResult.ok) return
 
     expect(unlockResult.value.publicKey).toBe(createResult.value.publicKey)
   })
 
-  it('rejects an invalid wallet password', () => {
+  it('rejects an invalid wallet pin', () => {
     directory = mkdtempSync(join(tmpdir(), 'hoshi-vault-'))
     const vault = new EncryptedKeypairVault(directory)
 
     const createResult = vault.create({
       walletId: crypto.randomUUID(),
-      password: 'very-secure-password',
+      pin: 'very-secure-pin',
     })
 
     expect(createResult.ok).toBe(true)
     if (!createResult.ok) return
 
-    const unlockResult = vault.unlock(createResult.value.walletId, 'wrong-password')
+    const unlockResult = vault.unlock(createResult.value.walletId, 'wrong-pin')
     expect(unlockResult.ok).toBe(false)
     if (!unlockResult.ok) {
       expect(unlockResult.error.code).toBe('AUTHENTICATION_ERROR')

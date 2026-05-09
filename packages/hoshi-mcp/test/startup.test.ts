@@ -9,6 +9,18 @@ function makeFakeContext() {
       port: 3001,
       host: '0.0.0.0'
     },
+    paymentCore: {
+      createChallenge: vi.fn(),
+      createCredential: vi.fn(),
+      createReceipt: vi.fn(),
+      createSession: vi.fn(),
+      topUpSession: vi.fn(),
+      closeSession: vi.fn(),
+      verifyCredential: vi.fn(),
+      getChallenge: vi.fn(),
+      getSession: vi.fn(),
+      registry: {} as never,
+    },
     chain: {
       getLatestBlockhash: vi.fn(async () => ({ ok: true, value: 'blockhash' }))
     },
@@ -64,6 +76,14 @@ describe('Hoshi MCP startup', () => {
 
     const names = app.listTools().map((tool) => tool.name)
     expect(names.slice(0, 3)).toEqual(['hoshi_balance', 'hoshi_balances', 'hoshi_wallet_info'])
+    expect(names).toEqual(expect.arrayContaining([
+      'hoshi_payment_challenge',
+      'hoshi_payment_credential',
+      'hoshi_payment_receipt',
+      'hoshi_payment_session_create',
+      'hoshi_payment_session_topup',
+      'hoshi_payment_session_close',
+    ]))
     expect(new Set(names).size).toBe(names.length)
 
     const response = await app.handleRequest({
@@ -75,6 +95,72 @@ describe('Hoshi MCP startup', () => {
     expect(response.result).toBeDefined()
     expect((response.result as any).tools.map((tool: any) => tool.name)).toEqual(names)
     expect((response.result as any).tools[0].description).toContain('[read]')
+  })
+
+  it('delegates payment orchestration tools to the shared payment core', async () => {
+    const paymentCore = {
+      createChallenge: vi.fn((input) => ({ kind: 'challenge', input })),
+      createCredential: vi.fn((challenge, payload) => ({ kind: 'credential', challenge, payload })),
+      createReceipt: vi.fn((credential, reference) => ({ kind: 'receipt', credential, reference })),
+      createSession: vi.fn((input) => ({ kind: 'session', input })),
+      topUpSession: vi.fn((sessionId, amount) => ({ kind: 'topup', sessionId, amount })),
+      closeSession: vi.fn((sessionId) => ({ kind: 'closed', sessionId })),
+      verifyCredential: vi.fn(),
+      getChallenge: vi.fn(),
+      getSession: vi.fn(),
+      registry: {} as never,
+    }
+
+    const app = await createHoshiMcpServer({
+      env: { HOSHI_TRANSPORT: 'stdio', HOSHI_POLICY_ENABLED: 'false' },
+      createContext: async () => ({ ...makeFakeContext(), paymentCore }),
+      loadSkills: () => new Map(),
+      skillsDir: '/tmp/ignored'
+    })
+
+    await app.getTool('hoshi_payment_challenge')?.handler({
+      protocol: 'x402',
+      intent: 'charge',
+      method: 'solana',
+      resource: 'https://example.com/pay',
+      amount: { amount: '10', asset: 'USDC' },
+      recipient: 'wallet-1',
+      requestHash: 'hash-1',
+    })
+
+    await app.getTool('hoshi_payment_credential')?.handler({
+      challenge: { challengeId: 'challenge-1' },
+      payload: { txSignature: 'sig-1' }
+    })
+
+    await app.getTool('hoshi_payment_receipt')?.handler({
+      credential: { credentialId: 'cred-1' },
+      reference: 'ref-1'
+    })
+
+    await app.getTool('hoshi_payment_session_create')?.handler({
+      protocol: 'mpp',
+      method: 'solana',
+      recipient: 'wallet-1',
+      funding: { amount: '1', asset: 'SOL' },
+      requestHash: 'hash-2',
+    })
+
+    await app.getTool('hoshi_payment_session_topup')?.handler({
+      sessionId: 'session-1',
+      amount: { amount: '2', asset: 'SOL' }
+    })
+
+    await app.getTool('hoshi_payment_session_close')?.handler({
+      sessionId: 'session-1'
+    })
+
+    expect(paymentCore.createChallenge).toHaveBeenCalledOnce()
+    expect(paymentCore.createCredential).toHaveBeenCalledOnce()
+    expect(paymentCore.createReceipt).toHaveBeenCalledOnce()
+    expect(paymentCore.createSession).toHaveBeenCalledOnce()
+    expect(paymentCore.topUpSession).toHaveBeenCalledOnce()
+    expect(paymentCore.closeSession).toHaveBeenCalledOnce()
   })
 
   it('wraps non-bypass tools with policy checks when enabled', async () => {

@@ -17,6 +17,7 @@ import { SafeguardError } from './safeguards/errors.js'
 import type { AccountSummary, HoshiConfig, Wallet, Receipt, SwapQuote } from './core/types.js'
 import { HoshiSDKError } from './core/errors.js'
 import type { MppPaymentIntent, X402PaymentRequirement } from './payments/types.js'
+import { createPaymentCore, type PaymentCore, type PaymentCredential, type PaymentReceipt, type SessionIntent } from './payments/core/index.js'
 import { toMppPaymentIntent } from './payments/mpp.js'
 import { toX402PaymentRequirement } from './payments/x402.js'
 import type { StoragePort } from './ports/storage.js'
@@ -120,6 +121,7 @@ export interface CreateWalletInput {
 
 export class Hoshi {
   public readonly kya: KyaClient
+  public readonly paymentCore: PaymentCore
   private readonly config: HoshiConfig
   private readonly vault: EncryptedKeypairVault
   private _chain: ChainPort
@@ -158,6 +160,7 @@ export class Hoshi {
     this._invoiceService = new InvoiceService(this._storage)
     this._contacts = new ContactManager(options.configDir)
     this._safeguards = new SafeguardEnforcer(options.configDir)
+    this.paymentCore = createPaymentCore()
     this.kya = new KyaClient(
       new KyaAnchorRegistry({
         rpcEndpoint: this.config.rpcEndpoint,
@@ -452,6 +455,34 @@ export class Hoshi {
     asset: 'SOL' | 'USDC'
   }): Promise<Receipt> {
     return this.transfer(input)
+  }
+
+  createPaymentChallenge(input: Parameters<PaymentCore['createChallenge']>[0]) {
+    return this.paymentCore.createChallenge(input)
+  }
+
+  createPaymentCredential(challenge: Parameters<PaymentCore['createCredential']>[0], payload: Record<string, unknown>) {
+    return this.paymentCore.createCredential(challenge, payload)
+  }
+
+  verifyPaymentCredential(credential: PaymentCredential) {
+    return this.paymentCore.verifyCredential(credential)
+  }
+
+  createPaymentReceipt(credential: PaymentCredential, reference: string): PaymentReceipt {
+    return this.paymentCore.createReceipt(credential, reference)
+  }
+
+  createSession(input: Parameters<PaymentCore['createSession']>[0]): SessionIntent {
+    return this.paymentCore.createSession(input)
+  }
+
+  topUpSession(sessionId: string, amount: Parameters<PaymentCore['topUpSession']>[1]): SessionIntent {
+    return this.paymentCore.topUpSession(sessionId, amount)
+  }
+
+  closeSession(sessionId: string): SessionIntent {
+    return this.paymentCore.closeSession(sessionId)
   }
 
   async receive(input: {

@@ -3,6 +3,50 @@ import { PublicKey } from '@solana/web3.js'
 import type { MCPTool } from '../core/protocol.js'
 import type { ServerContext } from '../core/server.js'
 
+const paymentAmountSchema = z.object({
+  amount: z.string(),
+  asset: z.enum(['USDC', 'SOL'])
+})
+
+const paymentChallengeInputSchema = z.object({
+  protocol: z.enum(['x402', 'mpp']),
+  intent: z.enum(['charge', 'session']),
+  method: z.literal('solana'),
+  resource: z.string(),
+  amount: paymentAmountSchema,
+  recipient: z.string(),
+  requestHash: z.string(),
+  expiresInSeconds: z.number().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional()
+})
+
+const paymentChallengeSchema = z.object({
+  challengeId: z.string(),
+  protocol: z.enum(['x402', 'mpp']),
+  intent: z.enum(['charge', 'session']),
+  method: z.literal('solana'),
+  resource: z.string(),
+  amount: paymentAmountSchema,
+  recipient: z.string(),
+  requestHash: z.string(),
+  createdAt: z.string(),
+  expiresAt: z.string(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+  status: z.enum(['pending', 'verified', 'expired'])
+})
+
+const paymentCredentialSchema = z.object({
+  credentialId: z.string(),
+  challengeId: z.string(),
+  protocol: z.enum(['x402', 'mpp']),
+  intent: z.enum(['charge', 'session']),
+  method: z.literal('solana'),
+  requestHash: z.string(),
+  payload: z.record(z.string(), z.unknown()),
+  createdAt: z.string(),
+  expiresAt: z.string()
+})
+
 const readWallet = async (context: ServerContext, walletId: string) => {
   const result = await context.walletService.getById(walletId)
   if (!result.ok) throw new Error(result.error.message)
@@ -303,6 +347,82 @@ export function createPaymentTools(context: ServerContext): MCPTool[] {
         const result = await context.yieldService.withdraw({ walletId, positionId })
         if (!result.ok) throw new Error(result.error.message)
         return { receipt: result.value }
+      }
+    }),
+    asTool({
+      name: 'hoshi_payment_challenge',
+      description: 'Create a Solana payment challenge using the shared payment core',
+      inputSchema: paymentChallengeInputSchema,
+      category: 'read',
+      handler: async (args) => {
+        return { challenge: context.paymentCore.createChallenge(args as never) }
+      }
+    }),
+    asTool({
+      name: 'hoshi_payment_credential',
+      description: 'Create a Solana payment credential using the shared payment core',
+      inputSchema: z.object({
+        challenge: paymentChallengeSchema,
+        payload: z.record(z.string(), z.unknown())
+      }),
+      category: 'read',
+      handler: async (args) => {
+        const { challenge, payload } = args as { challenge: unknown; payload: Record<string, unknown> }
+        return { credential: context.paymentCore.createCredential(challenge as never, payload) }
+      }
+    }),
+    asTool({
+      name: 'hoshi_payment_receipt',
+      description: 'Create a payment receipt using the shared payment core',
+      inputSchema: z.object({
+        credential: paymentCredentialSchema,
+        reference: z.string()
+      }),
+      category: 'read',
+      handler: async (args) => {
+        const { credential, reference } = args as { credential: unknown; reference: string }
+        return { receipt: context.paymentCore.createReceipt(credential as never, reference) }
+      }
+    }),
+    asTool({
+      name: 'hoshi_payment_session_create',
+      description: 'Create a payment session using the shared payment core',
+      inputSchema: z.object({
+        protocol: z.literal('mpp'),
+        method: z.literal('solana'),
+        recipient: z.string(),
+        funding: paymentAmountSchema,
+        requestHash: z.string(),
+        expiresInSeconds: z.number().optional()
+      }),
+      category: 'read',
+      handler: async (args) => {
+        return { session: context.paymentCore.createSession(args as never) }
+      }
+    }),
+    asTool({
+      name: 'hoshi_payment_session_topup',
+      description: 'Add funds to a payment session using the shared payment core',
+      inputSchema: z.object({
+        sessionId: z.string(),
+        amount: paymentAmountSchema
+      }),
+      category: 'read',
+      handler: async (args) => {
+        const { sessionId, amount } = args as { sessionId: string; amount: { amount: string; asset: 'USDC' | 'SOL' } }
+        return { session: context.paymentCore.topUpSession(sessionId, amount) }
+      }
+    }),
+    asTool({
+      name: 'hoshi_payment_session_close',
+      description: 'Close a payment session using the shared payment core',
+      inputSchema: z.object({
+        sessionId: z.string()
+      }),
+      category: 'read',
+      handler: async (args) => {
+        const { sessionId } = args as { sessionId: string }
+        return { session: context.paymentCore.closeSession(sessionId) }
       }
     })
   ]

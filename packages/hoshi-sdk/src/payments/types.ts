@@ -1,9 +1,18 @@
-import type { Invoice, Money, PaymentLink } from '../core/types.js'
+import type { Invoice, PaymentLink } from '../core/types.js'
+import type {
+  ChargeIntent,
+  PaymentAmount,
+  PaymentChallenge,
+  PaymentCredential,
+  PaymentIntent,
+  PaymentReceipt,
+  SessionIntent,
+} from './core/index.js'
 
 export const PAYMENT_PROTOCOLS = ['x402', 'mpp'] as const
-
-export type PaymentProtocol = (typeof PAYMENT_PROTOCOLS)[number]
-export type PaymentKind = 'x402' | 'mpp'
+export type PaymentProtocolUnion = (typeof PAYMENT_PROTOCOLS)[number]
+export type PaymentProtocol = PaymentProtocolUnion
+export type PaymentKind = PaymentProtocolUnion
 
 export type PaymentRecord = Invoice | PaymentLink
 
@@ -12,10 +21,25 @@ export interface PaymentWrapper<TRecord extends PaymentRecord = PaymentRecord> {
   protocols: typeof PAYMENT_PROTOCOLS
   id: string
   walletId: string
-  amount: Money
+  amount: PaymentAmount
   description: string
   record: TRecord
+  challenge: PaymentChallenge
+  credential?: PaymentCredential
+  receipt?: PaymentReceipt
 }
 
-export type X402PaymentRequirement = PaymentWrapper<Invoice>
-export type MppPaymentIntent = PaymentWrapper<PaymentLink>
+export interface X402PaymentRequirement extends PaymentWrapper<Invoice> {
+  kind: 'x402'
+  challenge: PaymentChallenge
+  charge: ChargeIntent
+}
+
+export interface MppPaymentIntent extends PaymentWrapper<PaymentLink> {
+  kind: 'mpp'
+  challenge: PaymentChallenge
+  charge: ChargeIntent
+  session?: SessionIntent
+}
+
+export type { PaymentAmount, PaymentChallenge, PaymentCredential, PaymentIntent, PaymentReceipt, SessionIntent }

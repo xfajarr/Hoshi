@@ -1,6 +1,7 @@
 import { 
   SolanaChainAdapter,
   InMemoryStorageAdapter,
+  createPaymentCore,
   JupiterSwapAdapter,
   KaminoYieldAdapter,
   WalletService,
@@ -182,6 +183,8 @@ class McpJsonApprovalStore extends InMemoryApprovalStore {
 /**
  * MCP Server context with all dependencies
  */
+type PaymentCore = ReturnType<typeof createPaymentCore>
+
 export interface ServerContext {
   config: ServerConfig
   chain: ChainPort
@@ -199,6 +202,7 @@ export interface ServerContext {
   // Policy
   policyEngine: PolicyEngine
   executionService: ExecutionService
+  paymentCore: PaymentCore
   
   // Signer (optional)
   signer: SignerPort | null
@@ -235,6 +239,7 @@ export async function createServerContext(config: ServerConfig): Promise<ServerC
   const approvalStore = new McpJsonApprovalStore(approvalPath)
   const policyEngine = new PolicyEngine(policyStore, { defaultAction: config.defaultAction })
   const executionService = new ExecutionService(policyEngine, approvalStore)
+  const paymentCore = createPaymentCore()
   
   // Signer
   let signer: SignerPort | null = null
@@ -267,6 +272,7 @@ export async function createServerContext(config: ServerConfig): Promise<ServerC
     yieldService,
     policyEngine,
     executionService,
+    paymentCore,
     signer,
     tools: []
   }

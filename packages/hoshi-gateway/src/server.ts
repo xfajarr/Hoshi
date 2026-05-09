@@ -67,7 +67,7 @@ app.get('/services/:id', handlers.getService)
 app.get('/stats', handlers.getStats)
 
 // Protected routes with x402 middleware
-app.all('/proxy/:serviceId/*', x402Middleware(registry, meter), handlers.proxyRequest)
+app.all('/proxy/:serviceId/:path{.+}', x402Middleware(registry, meter), handlers.proxyRequest)
 
 // Start server
 const port = process.env.PORT ? parseInt(process.env.PORT) : 3000

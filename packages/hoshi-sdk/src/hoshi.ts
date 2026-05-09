@@ -1,7 +1,6 @@
 import { PublicKey } from '@solana/web3.js'
-import { EncryptedKeypairVault, type CreateKeystoreInput } from './adapters/solana/encrypted-keypair-vault.js'
+import { EncryptedKeypairVault } from './adapters/solana/encrypted-keypair-vault.js'
 import { SolanaChainAdapter } from './adapters/solana/connection.js'
-import { KeypairSigner } from './adapters/solana/keypair-signer.js'
 import { JupiterSwapAdapter } from './adapters/jupiter/client.js'
 import { KaminoYieldAdapter } from './adapters/kamino/client.js'
 import { InMemoryStorageAdapter } from './adapters/memory/storage.js'
